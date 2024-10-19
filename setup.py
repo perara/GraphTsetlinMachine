@@ -10,5 +10,13 @@ setup(
    description='Graph Tsetlin Machine',
    long_description='Graph Tsetlin Machine for Deep Logical Learning and Reasoning',
    keywords ='pattern-recognition cuda machine-learning interpretable-machine-learning rule-based-machine-learning propositional-logic graph tsetlin-machine regression convolution classification multi-layer',
-   packages=['GraphTsetlinMachine']
+   packages=['GraphTsetlinMachine'],
+   install_requires=[
+      'scipy',
+      'numba',
+      'scikit-image',
+      'tensorflow',
+      'pycuda',
+      'numpy'
+   ],
 )
