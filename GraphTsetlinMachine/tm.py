@@ -92,13 +92,13 @@ class CommonTsetlinMachine():
 			self.hypervectors = np.zeros((self.number_of_clauses, self.message_bits), dtype=np.uint32)
 			prime = prevprime(self.message_size)
 			for i in range(self.number_of_clauses):
-				self.hypervectors[i, 0] = i % (self.message_size)
-				self.hypervectors[i, 1] = (self.message_size) + prime - (i % prime)
+				self.hypervectors[i, 0] = i % self.message_size
+				self.hypervectors[i, 1] = self.message_size + prime - (i % prime)
 		else:
 			indexes = np.arange(self.message_size, dtype=np.uint32)
 			self.hypervectors = np.zeros((self.number_of_clauses, self.message_bits), dtype=np.uint32)
 			for i in range(self.number_of_clauses):
-				self.hypervectors[i,:] = np.random.choice(indexes, size=(self.message_bits), replace=False)
+				self.hypervectors[i,:] = np.random.choice(indexes, size=self.message_bits, replace=False)
 
 		self.initialized = False
 
@@ -174,7 +174,7 @@ class CommonTsetlinMachine():
 		self.number_of_message_literals = self.number_of_message_features*2
 		self.number_of_message_chunks = int((self.number_of_message_literals-1)//32 + 1)
 
-		if self.max_included_literals == None:
+		if self.max_included_literals is None:
 			self.max_included_literals = self.number_of_literals
 
 		parameters = """
@@ -242,7 +242,7 @@ class CommonTsetlinMachine():
 				self.prepare_message_ta_state(self.message_ta_state_gpu[depth], grid=self.grid, block=self.block)
 
 			cuda.Context.synchronize()
-		elif incremental == False:
+		elif not incremental:
 			self.prepare(g.state, self.ta_state_gpu, self.clause_weights_gpu, self.class_sum_gpu, grid=self.grid, block=self.block)
 			cuda.Context.synchronize()
 
