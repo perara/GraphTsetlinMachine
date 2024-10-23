@@ -29,11 +29,11 @@ import pycuda.curandom as curandom
 import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
-from scipy.sparse import csr_matrix
 import sys
-from time import time
+from GraphTsetlinMachine import graphtsetlinmachine as gtm
 
-g = curandom.XORWOWRandomNumberGenerator() 
+
+g = curandom.XORWOWRandomNumberGenerator()
 
 class CommonTsetlinMachine():
 	def __init__(
@@ -53,6 +53,8 @@ class CommonTsetlinMachine():
 			block=(128,1,1)
 	):
 		print("Initialization of sparse structure.")
+
+		self.state = gtm.GraphTsetlinMachineState()
 
 		self.number_of_clauses = number_of_clauses
 		self.number_of_clause_chunks = (number_of_clauses-1)//32 + 1
@@ -192,16 +194,30 @@ class CommonTsetlinMachine():
 #define MESSAGE_BITS %d
 """ % (self.number_of_outputs, self.number_of_clauses, self.number_of_literals, self.number_of_state_bits, self.boost_true_positive_feedback, self.T, self.q, self.max_included_literals, self.negative_clauses, graphs.max_number_of_graph_nodes, self.message_size, self.message_bits)
 
+		self.state.update_state({
+			"number_of_outputs": self.number_of_outputs,
+			"number_of_clauses": self.number_of_clauses,
+			"number_of_literals": self.number_of_literals,
+			"boost_true_positive_feedback": self.boost_true_positive_feedback,
+			"T": self.T,
+			"q": self.q,
+			"max_included_literals": self.max_included_literals,
+			"negative_clauses": self.negative_clauses,
+			"max_number_of_graph_nodes": graphs.max_number_of_graph_nodes,
+			"message_size": self.message_size,
+			"message_bits": self.message_bits
+		})
+
 		mod_prepare = SourceModule(parameters + kernels.code_header + kernels.code_prepare, no_extern_c=True)
 		self.prepare = mod_prepare.get_function("prepare")
 
-		self.prepare_message_ta_state = mod_prepare.get_function("prepare_message_ta_state")
+		self.prepare_message_ta_state = self.state.prepare_message_ta_state   #mod_prepare.get_function("prepare_message_ta_state")
 
 		self.allocate_gpu_memory()
 
 		mod_update = SourceModule(parameters + kernels.code_header + kernels.code_update, no_extern_c=True)
-		self.update = mod_update.get_function("update")
-		self.update.prepare("PfPiiPPPP")
+		self.update = self.state.update #mod_update.get_function("update")
+		#self.update.prepare("PfPiiPPPP")
 
 		self.update_message = mod_update.get_function("update_message")
 		self.update_message.prepare("PfPiPPPP")
@@ -425,19 +441,32 @@ class CommonTsetlinMachine():
 				)
 				cuda.Context.synchronize()
 
+				a = {"x": self.grid[0], "y": self.grid[1], "z": self.grid[2]},  # grid
+				b = {"x": self.block[0], "y": self.block[1], "z": self.block[2]},  # block
+				c = int(g.state),  # curand_state_ptr (DeviceAllocation)
+				d = self.s[0],  # s
+				df = int(self.ta_state_gpu),  # global_ta_state_ptr
+				f = int(graphs.number_of_graph_nodes[e]),  # number_of_nodes
+				gd = int(graphs.node_index[e]),  # graph_index
+				h = int(self.clause_node_gpu),  # clause_node_ptr
+				i = int(self.number_of_include_actions),  # number_of_include_actions_ptr
+				j = int(self.encoded_X_train_gpu),  # X_ptr
+				k = int(self.class_clause_update_gpu)  # class_clause_update_ptr
+
+
 				# Update clause Tsetlin automata blocks for layer one
-				self.update.prepared_call(
-					self.grid,
-					self.block,
-					g.state,
-					self.s[0],
-					self.ta_state_gpu,
-					np.int32(graphs.number_of_graph_nodes[e]),
-					np.int32(graphs.node_index[e]),
-					self.clause_node_gpu,
-					self.number_of_include_actions,
-					self.encoded_X_train_gpu,
-					self.class_clause_update_gpu
+				self.update(
+					{"x": self.grid[0], "y": self.grid[1], "z": self.grid[2]},  # grid
+					{"x": self.block[0], "y": self.block[1], "z": self.block[2]},  # block
+					(g.state),  # curand_state_ptr (DeviceAllocation)
+					self.s[0],  # s
+					int(self.ta_state_gpu),  # global_ta_state_ptr
+					int(graphs.number_of_graph_nodes[e]),  # number_of_nodes
+					int(graphs.node_index[e]),  # graph_index
+					int(self.clause_node_gpu),  # clause_node_ptr
+					int(self.number_of_include_actions),  # number_of_include_actions_ptr
+					int(self.encoded_X_train_gpu),  # X_ptr
+					int(self.class_clause_update_gpu)  # class_clause_update_ptr
 				)
 				cuda.Context.synchronize()
 
